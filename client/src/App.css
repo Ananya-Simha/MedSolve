@@ -1,0 +1,62 @@
+/* App.css */
+.nav-bar {
+  padding: 15px 30px;
+  background-color: #1a1a2e; /* A slightly richer, deeper dark background */
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'Inter', system-ui, sans-serif;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15); /* Adds a subtle shadow for depth */
+}
+
+.nav-title {
+  margin: 0;
+}
+
+.nav-logo {
+  color: #ffffff;
+  text-decoration: none;
+  font-weight: bold;
+  letter-spacing: 0.5px;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 25px; /* Creates clean, even spacing between all links */
+}
+
+.nav-link {
+  color: #cccccc; /* Soft grey for inactive links */
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.nav-link:hover {
+  color: #ffffff; /* Brightens on hover */
+}
+
+/* Specific styling for the New Case button to make it pop */
+.btn-new-case {
+  color: #4dabf7;
+  font-weight: 600;
+}
+
+.btn-new-case:hover {
+  color: #74c0fc;
+}
+
+/* The solid Register button */
+.btn-register {
+  background-color: #0056b3;
+  padding: 8px 16px;
+  border-radius: 6px;
+  color: #ffffff;
+  transition: background-color 0.2s ease;
+}
+
+.btn-register:hover {
+  background-color: #004494;
+  color: #ffffff;
+}

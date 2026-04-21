@@ -1,0 +1,61 @@
+.board-container {
+  padding: 20px;
+  font-family: sans-serif;
+}
+.welcome-banner {
+  background-color: #e8f4f8;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.welcome-text h2 {
+  margin: 0;
+  color: #0056b3;
+}
+.welcome-text p {
+  margin: 0;
+}
+.score-display {
+  text-align: right;
+}
+.score-display h1 {
+  margin: 0;
+  font-size: 36px;
+  color: #28a745;
+}
+.score-display p {
+  margin: 0;
+  font-weight: bold;
+}
+.guest-banner {
+  background-color: #fff3cd;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+.guest-banner p {
+  margin: 0;
+}
+.case-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 20px;
+}
+.case-card {
+  border: 1px solid #ccc;
+  padding: 15px;
+  border-radius: 8px;
+  background-color: #f9f9f9;
+}
+.btn-open {
+  display: inline-block;
+  padding: 8px 12px;
+  background-color: #0056b3;
+  color: white;
+  text-decoration: none;
+  border-radius: 4px;
+  margin-top: 10px;
+}
