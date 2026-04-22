@@ -13,7 +13,7 @@ function App() {
 
   // Check if someone is logged in when the app loads
   useEffect(() => {
-    fetch(`${import.meta.env.VITE_API_URL}/api//me`, { credentials: 'include' })
+    fetch(`${import.meta.env.VITE_API_URL}/api/me`, { credentials: 'include' })
       .then((res) => {
         if (res.ok) return res.json();
         return null;
