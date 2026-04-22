@@ -14,48 +14,64 @@ dns.setServers(['8.8.8.8', '8.8.4.4']);
 dotenv.config();
 
 const app = express();
-app.use(
-    cors({
-        origin: 'http://localhost:5173', // Your Vite frontend URL
-        credentials: true, // This allows cookies/sessions to be sent back and forth!
-    })
-);
 const PORT = process.env.PORT || 5000;
 
 // ==========================================
-// 1. MANUAL CORS MIDDLEWARE (Rubric Requirement)
+// 1. TRUST PROXY (Crucial for Render)
 // ==========================================
-app.use((req, res, next) => {
-    // Must match your Vite React frontend URL exactly for cookies to work
-    const allowedOrigin = 'http://localhost:5173';
+// Render routes traffic through a proxy. This tells Express to trust that proxy
+// so it can safely send secure cross-site cookies over HTTPS.
+app.set('trust proxy', 1);
 
-    res.header('Access-Control-Allow-Origin', allowedOrigin);
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+// ==========================================
+// 2. CORS MIDDLEWARE
+// ==========================================
+const allowedOrigins = [
+    'http://localhost:5173',
+    'https://medsolve-eosin.vercel.app/' // NOTE: Ensure this exactly matches your Vercel URL!
+];
 
-    // Handle preflight requests
-    if (req.method === 'OPTIONS') {
-        return res.status(200).end();
-    }
-    next();
-});
+app.use(
+    cors({
+        origin: function (origin, callback) {
+            // Allow requests with no origin (like mobile apps or curl requests)
+            if (!origin || allowedOrigins.includes(origin)) {
+                callback(null, true);
+            } else {
+                callback(new Error('Not allowed by CORS'));
+            }
+        },
+        credentials: true, // This allows cookies/sessions to be sent cross-origin!
+    })
+);
 
 // Middleware to parse JSON bodies
 app.use(express.json());
+
+// ==========================================
+// 3. SESSION & PASSPORT CONFIGURATION
+// ==========================================
 app.use(
     session({
-        secret: 'medsolve_super_secret_key', // In production, this goes in your .env file!
+        secret: process.env.SESSION_SECRET || 'medsolve_super_secret_key',
         resave: false,
         saveUninitialized: false,
-        cookie: { secure: false }, // Set to true if using HTTPS, but false for localhost
+        cookie: {
+            // In production, must be true for cross-site cookies. False for localhost.
+            secure: process.env.NODE_ENV === 'production',
+            // 'none' allows cookies to be sent from Vercel to Render. 'lax' for localhost.
+            sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+            httpOnly: true,
+            maxAge: 1000 * 60 * 60 * 24, // 1 day
+        },
     })
 );
+
 app.use(passport.initialize());
 app.use(passport.session());
 
 // ==========================================
-// 2. MONGODB NATIVE DRIVER SETUP
+// 4. MONGODB NATIVE DRIVER SETUP
 // ==========================================
 const client = new MongoClient(process.env.MONGO_URI);
 let db;
@@ -72,25 +88,8 @@ async function connectDB() {
 connectDB();
 
 // ==========================================
-// 3. SESSION & PASSPORT CONFIGURATION
+// 5. PASSPORT LOCAL STRATEGY
 // ==========================================
-app.use(
-    session({
-        secret: process.env.SESSION_SECRET || 'super_secret_medsolve_key',
-        resave: false,
-        saveUninitialized: false,
-        cookie: {
-            secure: false, // Set to true if using HTTPS in production
-            httpOnly: true,
-            maxAge: 1000 * 60 * 60 * 24, // 1 day
-        },
-    })
-);
-
-app.use(passport.initialize());
-app.use(passport.session());
-
-// Passport Local Strategy (Login Logic)
 passport.use(
     new LocalStrategy(async (username, password, done) => {
         try {
@@ -113,17 +112,14 @@ passport.use(
     })
 );
 
-// Serialize user (Save user ID to session)
 passport.serializeUser((user, done) => {
     done(null, user._id.toString());
 });
 
-// Deserialize user (Get user from DB using ID in session)
 passport.deserializeUser(async (id, done) => {
     try {
         const usersCollection = db.collection('Users');
         const user = await usersCollection.findOne({ _id: new ObjectId(id) });
-        // Don't send the password hash back with the user object
         if (user) delete user.password;
         done(null, user);
     } catch (err) {
@@ -132,26 +128,21 @@ passport.deserializeUser(async (id, done) => {
 });
 
 // ==========================================
-// 4. AUTHENTICATION ROUTES
+// 6. AUTHENTICATION ROUTES
 // ==========================================
-
-// Register a new Doctor/Intern
 app.post('/api/register', async (req, res) => {
     try {
         const { username, password } = req.body;
 
-        // 1. Check if user already exists
         const usersCollection = db.collection('Users');
         const existingUser = await usersCollection.findOne({ username });
         if (existingUser) {
             return res.status(400).json({ error: 'Username already taken.' });
         }
 
-        // 2. Hash the password (NEVER save plain text passwords!)
         const salt = await bcrypt.genSalt(10);
         const hashedPassword = await bcrypt.hash(password, salt);
 
-        // 3. Save the new user
         await usersCollection.insertOne({
             username,
             password: hashedPassword,
@@ -166,51 +157,6 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-// ==========================================
-// PASSPORT AUTHENTICATION SETUP
-// ==========================================
-
-// 1. The Strategy (The Bouncer)
-passport.use(
-    new LocalStrategy(async (username, password, done) => {
-        try {
-            const usersCollection = db.collection('Users');
-            const user = await usersCollection.findOne({ username });
-
-            if (!user) {
-                return done(null, false, { message: 'Incorrect username.' });
-            }
-
-            // Compare the typed password with the hashed password in the DB
-            const passwordsMatch = await bcrypt.compare(password, user.password);
-            if (!passwordsMatch) {
-                return done(null, false, { message: 'Incorrect password.' });
-            }
-
-            return done(null, user); // Success! Let them in.
-        } catch (err) {
-            return done(err);
-        }
-    })
-);
-
-// 2. Serialize User (Save their ID to the session cookie)
-passport.serializeUser((user, done) => {
-    done(null, user._id.toString());
-});
-
-// 3. Deserialize User (Read the cookie and find the user in the DB)
-passport.deserializeUser(async (id, done) => {
-    try {
-        const usersCollection = db.collection('Users');
-        const user = await usersCollection.findOne({ _id: new ObjectId(id) });
-        done(null, user);
-    } catch (err) {
-        done(err);
-    }
-});
-
-// 4. The Login Route
 app.post('/api/login', (req, res, next) => {
     passport.authenticate('local', (err, user, info) => {
         if (err) return res.status(500).json({ error: 'Server error' });
@@ -222,17 +168,18 @@ app.post('/api/login', (req, res, next) => {
         });
     })(req, res, next);
 });
-// Logout Route
+
 app.post('/api/logout', (req, res, next) => {
     req.logout((err) => {
         if (err) return res.status(500).json({ error: 'Logout failed' });
-        // Clear the session cookie!
         res.clearCookie('connect.sid');
         return res.json({ message: 'Logged out successfully' });
     });
 });
 
-// Get Medical Cases for the Frontend
+// ==========================================
+// 7. CRUD OPERATIONS FOR MEDICAL CASES
+// ==========================================
 app.get('/api/cases', async (req, res) => {
     try {
         const casesCollection = db.collection('MedicalCases');
@@ -243,11 +190,10 @@ app.get('/api/cases', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch cases' });
     }
 });
-// Get a Single Medical Case by ID
+
 app.get('/api/cases/:id', async (req, res) => {
     try {
         const casesCollection = db.collection('MedicalCases');
-        // We use ObjectId to convert the string ID from the URL into a MongoDB ID
         const singleCase = await casesCollection.findOne({ _id: new ObjectId(req.params.id) });
 
         if (!singleCase) return res.status(404).json({ error: 'Case not found' });
@@ -257,15 +203,10 @@ app.get('/api/cases/:id', async (req, res) => {
         res.status(500).json({ error: 'Failed to fetch case file' });
     }
 });
-// ==========================================
-// CRUD OPERATIONS FOR MEDICAL CASES
-// ==========================================
 
-// CREATE: Add a brand new case file
 app.post('/api/cases', async (req, res) => {
     try {
         const casesCollection = db.collection('MedicalCases');
-        // Add a timestamp to the incoming data
         const newCase = { ...req.body, createdAt: new Date() };
         const result = await casesCollection.insertOne(newCase);
         res.status(201).json(result);
@@ -274,11 +215,9 @@ app.post('/api/cases', async (req, res) => {
     }
 });
 
-// UPDATE: Edit an existing case file
 app.put('/api/cases/:id', async (req, res) => {
     try {
         const casesCollection = db.collection('MedicalCases');
-        // We pull out _id so we don't accidentally overwrite the MongoDB ID
         const { _id, ...updatedData } = req.body;
 
         await casesCollection.updateOne(
@@ -291,13 +230,10 @@ app.put('/api/cases/:id', async (req, res) => {
     }
 });
 
-// DELETE: Remove a case file permanently
 app.delete('/api/cases/:id', async (req, res) => {
-    // 1. Are they logged in?
     if (!req.isAuthenticated()) {
         return res.status(401).json({ error: 'Must be logged in to delete.' });
     }
-    // 2. Are they an Attending Physician?
     if (req.user.role !== 'Attending') {
         return res.status(403).json({ error: 'Unauthorized: Only Attendings can delete cases.' });
     }
@@ -310,15 +246,16 @@ app.delete('/api/cases/:id', async (req, res) => {
         res.status(500).json({ error: 'Failed to delete case' });
     }
 });
-// Get Current Logged-in User's Stats
+
+// ==========================================
+// 8. USER DATA ROUTES
+// ==========================================
 app.get('/api/me', async (req, res) => {
-    // Passport adds req.isAuthenticated() to check if the cookie is valid!
     if (!req.isAuthenticated()) {
         return res.status(401).json({ error: 'Not logged in' });
     }
 
     try {
-        // Fetch fresh user data to get their current score
         const usersCollection = db.collection('Users');
         const user = await usersCollection.findOne({ _id: new ObjectId(req.user._id) });
 
@@ -332,7 +269,6 @@ app.get('/api/me', async (req, res) => {
     }
 });
 
-// Increase Score when a Case is Solved
 app.post('/api/user/score', async (req, res) => {
     if (!req.isAuthenticated()) {
         return res.status(401).json({ error: 'Not logged in' });
@@ -340,7 +276,6 @@ app.post('/api/user/score', async (req, res) => {
 
     try {
         const usersCollection = db.collection('Users');
-        // Find the logged-in user and increment their score by 1
         await usersCollection.updateOne(
             { _id: new ObjectId(req.user._id) },
             { $inc: { casesSolved: 1 } }
@@ -351,7 +286,6 @@ app.post('/api/user/score', async (req, res) => {
     }
 });
 
-// Start the server
 app.listen(PORT, () => {
-    console.log(`🚀 MedSolve Server running on http://localhost:${PORT}`);
+    console.log(`🚀 MedSolve Server running on port ${PORT}`);
 });
