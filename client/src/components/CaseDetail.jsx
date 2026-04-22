@@ -29,7 +29,7 @@ export default function CaseDetail() {
       });
 
     // NEW: Fetch the logged-in user
-    fetch('${import.meta.env.VITE_API_URL}/api/me', { credentials: 'include' })
+    fetch(`${import.meta.env.VITE_API_URL}/api/me`, { credentials: 'include' })
       .then((res) => {
         if (res.ok) return res.json();
         return null;
@@ -92,7 +92,7 @@ export default function CaseDetail() {
 
       // --- NEW: Tell the backend to increase the score! ---
       try {
-        await fetch('${import.meta.env.VITE_API_URL}/api/user/score', {
+        await fetch(`${import.meta.env.VITE_API_URL}/api/user/score`, {
           method: 'POST',
           // CRUCIAL: This sends the login cookie so the server knows WHO scored!
           credentials: 'include',

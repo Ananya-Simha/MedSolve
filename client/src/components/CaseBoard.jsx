@@ -9,14 +9,14 @@ export default function CaseBoard() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch('${import.meta.env.VITE_API_URL}/api/cases')
+    fetch(`${import.meta.env.VITE_API_URL}/api/cases`)
       .then((res) => res.json())
       .then((data) => {
         setCases(data);
         setLoading(false);
       });
 
-    fetch('${import.meta.env.VITE_API_URL}/api/me', { credentials: 'include' })
+    fetch(`${import.meta.env.VITE_API_URL}/api/me`, { credentials: 'include' })
       .then((res) => {
         if (res.ok) return res.json();
         return null;
